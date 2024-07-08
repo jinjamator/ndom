@@ -5,7 +5,9 @@ import logging
 import os
 import xxhash
 import yaml
-log=logging.getLogger(__file__)
+log=logging.getLogger()
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
 
 class AttributeExistsError(BaseException):
     pass
@@ -18,11 +20,9 @@ class AutoJsonEncoder(json.JSONEncoder):
         if FRUBaseList in obj.__class__.__bases__:
             return obj.data
         if BaseFRU in obj.__class__.__bases__:
-            return obj._data
+            return obj.data
         return json.JSONEncoder.default(self, obj)
 
-
-""
 
 
 class BaseFRU(object):
@@ -30,7 +30,7 @@ class BaseFRU(object):
     def __init__(self, *args, **kwargs) -> None:
         self._parent = None
         self._renderer_list=[]
-        self._data = {}
+        self.data = {}
         self._attrs = kwargs.get(
             "_attrs",
             [
@@ -39,7 +39,7 @@ class BaseFRU(object):
                 "vendor",
                 "pid",
                 "serial_number",
-                "type",
+                "__type__",
                 ("capabilities", ()),
             ],
         )
@@ -47,35 +47,35 @@ class BaseFRU(object):
             if isinstance(attr, tuple):
                 if isinstance(attr[1], tuple):
                     list(attr[1])
-                self._data[attr[0]] = kwargs.get(attr, deepcopy(attr[1]))
+                self.data[attr[0]] = kwargs.get(attr, deepcopy(attr[1]))
             else:
-                self._data[attr] = kwargs.get(attr, None)
-        self._data["type"] = str(self.__class__.__name__)
+                self.data[attr] = kwargs.get(attr, None)
+        self.data["__type__"] = str(self.__class__.__name__)
 
     def __repr__(self):
-        return json.dumps(self._data, cls=AutoJsonEncoder, indent=2, sort_keys=False)
+        return json.dumps(self.data, cls=AutoJsonEncoder, indent=2, sort_keys=False)
 
     def __getattr__(self, name: str):
-        if name in self._data:
-            return self._data[name]
+        if name in self.data:
+            return self.data[name]
         return super().__getattribute__(name)
 
     def __setattr__(self, name: str, value) -> None:
-        if name in ["_data", "_parent","_renderer_list"]:
+        if name in ["data", "_parent","_renderer_list"]:
             super().__setattr__(name, value)
         # we do not implicitly create attributes by access for now
-        elif name in self._data:
-            self._data[name] = value
+        elif name in self.data:
+            self.data[name] = value
         else:
             super().__setattr__(name, value)
 
     def add_attr(self, name, default=None):
-        if name in self._data:
+        if name in self.data:
             raise AttributeExistsError(
                 f"cannot add already existing attribute {name} to {self.__class__.__name__}"
             )
         self._attrs.append((name, default))
-        self._data[name] = default
+        self.data[name] = default
 
     def add_attrs(self, new_attrs={}, **kwargs):
         for k, v in new_attrs.items():
@@ -85,12 +85,12 @@ class BaseFRU(object):
 
     def set_attrs(self, *args, **kwargs):
         for kwarg in kwargs:
-            if kwarg in self._data:
-                self._data[kwarg] = kwargs[kwarg]
+            if kwarg in self.data:
+                self.data[kwarg] = kwargs[kwarg]
 
     def get_attr(self, name):
         try:
-            return self._data[name]
+            return self.data[name]
         except KeyError:
             raise AttributeError(f"unknown attribute {name}")
     
@@ -121,7 +121,7 @@ class FRUBaseList(UserList):
             return self.data.append(item)
 
         raise ValueError(
-            f"Cannot add a {item.__class__.__name__} item to {self.__class__.__name__}. Allowed types are {self._allowed_class_types}"
+            f"Cannot add a {item.__class__.__name__} item to {self.__class__.__name__}. Allowed __type__s are {self._allowed_class_types}"
         )
 
 
@@ -129,6 +129,7 @@ class FRUBaseDict(UserDict):
     def __init__(self, *args, **kwargs):
         self._allowed_class_types = []
         super().__init__(*args, **kwargs)
+        self.data["__type__"]=self.__class__.__name__
 
     def __setattr__(self, name: str, value) -> None:
         if name in ["_allowed_class_types", "data"] or name.startswith("_"):
@@ -138,7 +139,7 @@ class FRUBaseDict(UserDict):
             self.data[name] = value
             return None
         raise ValueError(
-            f"Cannot set a {value.__class__.__name__} item to {self.__class__.__name__}. Allowed types are {self._allowed_class_types}"
+            f"Cannot set a {value.__class__.__name__} item to {self.__class__.__name__}. Allowed __type__s are {self._allowed_class_types}"
         )
 
     def append(self, obj):
@@ -154,7 +155,7 @@ class Interface(BaseFRU):
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args,
-            _attrs=["id", "name", "type", "speed", ("capabilities", ())],
+            _attrs=["id", "name", "__type__", "speed", ("capabilities", ())],
             **kwargs,
         )
 
@@ -173,12 +174,12 @@ class InterfaceRange(FRUBaseDict):
         for i in range(self._start, self._stop + 1):
             name = self._prefix + self._delimiter + str(i)
             self.append(Interface(*args, name=name, **kwargs))
-
+        
 
 class PSU(BaseFRU):
     def __init__(self, *args, **kwargs):
         super().__init__(
-            *args, _attrs=["id", "type", "power", ("capabilities", ())], **kwargs
+            *args, _attrs=["id", "__type__", "power", ("capabilities", ())], **kwargs
         )
 
 
@@ -197,13 +198,13 @@ class PSUList(FRUBaseList):
 class InfrastructureDevice(BaseFRU):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._data["powersupplies"] = PSUList()
+        self.data["powersupplies"] = PSUList()
 
 
 class NetworkedInfrastructureDevice(InfrastructureDevice):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._data["interfaces"] = InterfaceDict()
+        self.data["interfaces"] = InterfaceDict()
 
 class BaseRenderer(object):
     def __init__(self,*args,**kwargs):
@@ -262,8 +263,65 @@ class YAMLRenderer(BaseRenderer):
             self.save(*args,path=path,**kwargs)
         return ymlstr
 
+class BaseLoader(object):
+    def __init__(self,*args,**kwargs):
+        self._obj=None
+    
+    def load(self,*args,**kwargs):
+        return self.__load__(data,**kwargs)
+
+    def __load__(self,*args,**kwargs):
+        print("---------------")
+        _attrs={}
+        data=kwargs.get("data",{})
+        obj=None
+        obj_type=None
+        if isinstance(data,dict):
+            obj_type=kwargs.get("data",{}).get("__type__")
+            if obj_type=="InterfaceRange":
+                obj_type="InterfaceDict"
+            obj=globals()[obj_type]()
+            for k,v in kwargs.get("data",{}).items():
+                # print(k,v)
+                if k == "__type__":
+                    pass
+                elif isinstance(v,list):
+                    obj.data[k]=self.__load__(data=v)
+                elif isinstance(v,dict):
+                    obj.data[k]=self.__load__(data=v)
+                else:                    
+                    obj.set_attrs(**{k:v})
+        elif isinstance(data,list):
+            obj=data
+        else:
+            obj_type=data.__class__.__name__
+        return obj
+    
+        # print(data)
+        # if isinstance(data,dict):
+        #     obj_type=kwargs.get("data",{}).get("__type__")
+        # if obj_type:
+        #     obj=globals()[obj_type]()
+        # for k,v in kwargs.get("data",{}).items():
+        #     if isinstance(v,list):
+        #         if obj_type:
+        #             obj[k]=self.__load__(data=v)
+        #         else:
+        #             return []
+        #     if isinstance(v,dict):
+        #         print(k,v)
+        #         if obj_type:
+        #             obj[k]=self.__load__(data=v)
+        #         else:
+        #             return {}
+        #     else:
+        #         obj.set_attrs(**{k:v})
+        # return obj
+        # print (obj)
+        
+
 # switch = NetworkedInfrastructureDevice(name="test")
-# switch.serial_number = "KLUMP1234"
+# switch.serial_number = "KLUMP 234"
 # switch.so_nicht = "oarsch"
 # switch.add_attr("so_gehts", "hallo")
 # print(switch)
@@ -300,7 +358,7 @@ class YAMLRenderer(BaseRenderer):
 # switch2.interfaces = InterfaceRange("e1/1-32", speed=1000)
 
 switch3 = NetworkedInfrastructureDevice(name="test3")
-switch3.interfaces = InterfaceRange("ten1/1/1-2", speed=1000)
+switch3.interfaces = InterfaceRange("ten1/1/1-2")
 
 
 printer=BaseRenderer()
@@ -311,6 +369,12 @@ yamlwriter=YAMLRenderer()
 switch3.add_render_plugin(jsonwriter)
 switch3.add_render_plugin(yamlwriter)
 # switch3.add_render_plugin(printer)
-switch3.render()
+
 from pprint import pprint
-pprint(switch3.render(json_path="switch.json",yaml_path="switch.yaml",overwrite=True))
+data=switch3.render(json_path="switch.json",yaml_path="switch.yaml",overwrite=True)
+
+parsed_data=json.loads(data[0][1])
+pprint(parsed_data)
+test_loader=BaseLoader()
+print("result")
+print(test_loader.load(data=parsed_data))
