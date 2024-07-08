@@ -245,9 +245,9 @@ class BaseRenderer(object):
 class JSONRenderer(BaseRenderer):
     def render(self,obj,*args,**kwargs):
         self._obj=obj
-        path=kwargs.get("path")
+        path=kwargs.get("json_path")
         if path:
-            self.save(*args,**kwargs)
+            self.save(*args,path=path,**kwargs)
         return str(self._obj)
 
 class YAMLRenderer(BaseRenderer):
@@ -257,14 +257,10 @@ class YAMLRenderer(BaseRenderer):
         # this is not optimal performance wise, but sufficient for now
         data=json.loads(str(obj))
         self._obj=ymlstr=yaml.dump(data)
+        path=kwargs.get("yaml_path")
         if path:
-            self.save(*args,**kwargs)
+            self.save(*args,path=path,**kwargs)
         return ymlstr
-
-    
-
-    def save(self,yaml,**kwargs):
-        return self.__save_file__(*args,**kwargs)
 
 # switch = NetworkedInfrastructureDevice(name="test")
 # switch.serial_number = "KLUMP1234"
