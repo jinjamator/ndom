@@ -2,7 +2,9 @@ from collections import UserList, UserDict
 import json
 from copy import deepcopy
 import logging
-
+import os
+import xxhash
+import yaml
 log=logging.getLogger(__file__)
 
 class AttributeExistsError(BaseException):
@@ -96,11 +98,14 @@ class BaseFRU(object):
         self._renderer_list.append(instance)
 
     def render(self,*args,**kwargs):
+        results=[]
         if not self._renderer_list:
             log.error("Cannot render data as no renderer registred")
+        
         for render_plugin in self._renderer_list:
-            render_plugin.render(self)
-
+            results.append((render_plugin,render_plugin.render(self,*args,**kwargs)))
+        return results
+    
     def save(self,*args,**kwargs):
         self.render(*args,**kwargs)
 
@@ -202,52 +207,114 @@ class NetworkedInfrastructureDevice(InfrastructureDevice):
 
 class BaseRenderer(object):
     def __init__(self,*args,**kwargs):
-        pass
-    def render(self,obj):
+        self._obj=None
+        self._file_suffix="json"
+    
+    def render(self,obj,*args,**kwargs):
+        self._obj=obj
         print(obj)
 
+    def save(self,*args,**kwargs):
+        return self.__save_file__(*args,**kwargs)
 
-switch = NetworkedInfrastructureDevice(name="test")
-switch.serial_number = "KLUMP1234"
-switch.so_nicht = "oarsch"
-switch.add_attr("so_gehts", "hallo")
-print(switch)
-switch.so_gehts = "hihihi"
-switch.add_attrs(
-    {"entweder_so_list": ["mit", "defaults"]}, oder_so_geht_auch="str default"
-)
-print(switch)
-switch.entweder_so_list.append("haha")
-print(switch.powersupplies)
-switch.set_attrs(pid="asdf", vendor="citschgo")
-print(switch.get_attr("pid"))
-try:
-    print(switch.get_attr("gibts ned"))
-except AttributeError:
-    pass
-interface = Interface(name="1/1")
-interface2 = Interface(name="1/2")
+    def __save_file__(self,*args,**kwargs):
+        dirname=None
+        filename=kwargs.get("filename")
+        path=kwargs.get("path")
+        create_destination_directory=kwargs.get("create_destination_directory",True)
+        if os.path.isfile(path) and not kwargs.get("overwrite"):
+            log.info("destination path exists, use overwrite=True to overwrite")
+            return False
+        if os.path.isdir(path):
+            dirname=path
+        if dirname and not kwargs.get("filename"):
+            filename=xxhash.xxh32_hexdigest(self._obj) + f".{self._file_suffix}"
+            log.info(f"destination path is a directory, but no filename supplied, generated filename {filename}")
+        if not dirname and not filename:
+            filename=os.path.basename(path)
+            dirname=os.path.dirname(path)
+        if dirname and not os.path.isdir(dirname) and create_destination_directory:
+            os.makedirs(dirname)
+        if dirname:
+            final_path=dirname + os.path.sep + filename
+        else:
+            final_path=filename
+        with open(final_path ,"w") as fh:
+            fh.write(str(self._obj))
 
-psu_1 = PSU(power=1000)
-psu_2 = PSU(power=1500)
+class JSONRenderer(BaseRenderer):
+    def render(self,obj,*args,**kwargs):
+        self._obj=obj
+        path=kwargs.get("path")
+        if path:
+            self.save(*args,**kwargs)
+        return str(self._obj)
 
-print(interface)
-switch.interfaces.append(interface)
-switch.interfaces.append(interface2)
+class YAMLRenderer(BaseRenderer):
+    def render(self,obj,*args,**kwargs):
+        self.obj=obj
+        path=kwargs.get("path")
+        # this is not optimal performance wise, but sufficient for now
+        data=json.loads(str(obj))
+        self._obj=ymlstr=yaml.dump(data)
+        if path:
+            self.save(*args,**kwargs)
+        return ymlstr
 
-switch.powersupplies.append(psu_1)
-switch.powersupplies.append(psu_2)
-print(switch)
-print(switch.interfaces[0])
+    
+
+    def save(self,yaml,**kwargs):
+        return self.__save_file__(*args,**kwargs)
+
+# switch = NetworkedInfrastructureDevice(name="test")
+# switch.serial_number = "KLUMP1234"
+# switch.so_nicht = "oarsch"
+# switch.add_attr("so_gehts", "hallo")
+# print(switch)
+# switch.so_gehts = "hihihi"
+# switch.add_attrs(
+#     {"entweder_so_list": ["mit", "defaults"]}, oder_so_geht_auch="str default"
+# )
+# print(switch)
+# switch.entweder_so_list.append("haha")
+# print(switch.powersupplies)
+# switch.set_attrs(pid="asdf", vendor="citschgo")
+# print(switch.get_attr("pid"))
+# try:
+#     print(switch.get_attr("gibts ned"))
+# except AttributeError:
+#     pass
+# interface = Interface(name="1/1")
+# interface2 = Interface(name="1/2")
+
+# psu_1 = PSU(power=1000)
+# psu_2 = PSU(power=1500)
+
+# print(interface)
+# switch.interfaces.append(interface)
+# switch.interfaces.append(interface2)
+
+# switch.powersupplies.append(psu_1)
+# switch.powersupplies.append(psu_2)
+# print(switch)
+# print(switch.interfaces[0])
 
 
-switch2 = NetworkedInfrastructureDevice(name="test2")
-switch2.interfaces = InterfaceRange("e1/1-32", speed=1000)
+# switch2 = NetworkedInfrastructureDevice(name="test2")
+# switch2.interfaces = InterfaceRange("e1/1-32", speed=1000)
 
 switch3 = NetworkedInfrastructureDevice(name="test3")
-switch3.interfaces = InterfaceRange("ten1/1/1-47", speed=1000)
+switch3.interfaces = InterfaceRange("ten1/1/1-2", speed=1000)
 
 
 printer=BaseRenderer()
-switch3.add_render_plugin(printer)
+
+jsonwriter=JSONRenderer()
+yamlwriter=YAMLRenderer()
+
+switch3.add_render_plugin(jsonwriter)
+switch3.add_render_plugin(yamlwriter)
+# switch3.add_render_plugin(printer)
 switch3.render()
+from pprint import pprint
+pprint(switch3.render(json_path="switch.json",yaml_path="switch.yaml",overwrite=True))
