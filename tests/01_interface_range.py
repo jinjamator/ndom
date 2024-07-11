@@ -1,9 +1,11 @@
-#!/usr/bin/env -S pytest -v
+#!/usr/bin/env -S pytest -v -rP
+#-rP
 
 import logging
 log=logging.getLogger()
 from ndom.dom.base.device import NetworkedInfrastructureDevice
 from  ndom.dom.base.interface import Interface,InterfaceRange
+from ndom.dom.base.exceptions import MissingRequiredInstanceAttribute
 import pytest
 
 
@@ -19,7 +21,7 @@ def test_interface_range_type():
 
 def test_interface_range_append():
     # 49 interfaces, 1 __type__ info
-    switch.interfaces.append(Interface("ten2/1"))
+    switch.interfaces.append(Interface(name="ten2/1"))
     assert len(list(switch.interfaces.keys())) == 50
     
 def test_interface_range_remove():
@@ -39,4 +41,8 @@ def test_interface_range_attribute_on_creation():
 
     assert switch.interfaces["ten1/1/1"].speed == 1000
     assert switch.interfaces["ten1/1/48"].speed == 1000
+    
+    with pytest.raises(MissingRequiredInstanceAttribute):
+        switch.interfaces.append(Interface("thisiswrong"))
+
     
