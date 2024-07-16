@@ -1,7 +1,9 @@
 from collections import UserList, UserDict
 from copy import deepcopy
 import json
-from .exceptions import AttributeExistsError
+from .exceptions import AttributeExistsError,MissingRequiredInstanceAttribute,RendererAlreadyRegistredError
+import logging
+log=logging.getLogger(__file__)
 
 class AutoJsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -18,7 +20,7 @@ class BaseFRU(object):
 
     def __init__(self, *args, **kwargs) -> None:
         self._parent = None
-        self._renderer_list=[]
+        self._renderer={}
         self.data = {}
         self._attrs = kwargs.get(
             "_attrs",
@@ -32,6 +34,9 @@ class BaseFRU(object):
                 ("capabilities", ()),
             ],
         )
+        self._required_attrs=kwargs.get("_required_attrs",[
+            "name"
+        ])
         for attr in self._attrs:
             if isinstance(attr, tuple):
                 if isinstance(attr[1], tuple):
@@ -39,7 +44,12 @@ class BaseFRU(object):
                 self.data[attr[0]] = kwargs.get(attr, deepcopy(attr[1]))
             else:
                 self.data[attr] = kwargs.get(attr, None)
+            if attr in self._required_attrs and not self.data[attr]:
+                  raise MissingRequiredInstanceAttribute(f"{attr} missing in kwargs, you have to supply at least {self._required_attrs}")
+
         self.data["__type__"] = str(self.__class__.__name__)
+        
+              
 
     def __repr__(self):
         return json.dumps(self.data, cls=AutoJsonEncoder, indent=2, sort_keys=False)
@@ -50,7 +60,7 @@ class BaseFRU(object):
         return super().__getattribute__(name)
 
     def __setattr__(self, name: str, value) -> None:
-        if name in ["data", "_parent","_renderer_list"]:
+        if name in ["data", "_parent","_renderer"]:
             super().__setattr__(name, value)
         # we do not implicitly create attributes by access for now
         elif name in self.data:
@@ -83,18 +93,23 @@ class BaseFRU(object):
         except KeyError:
             raise AttributeError(f"unknown attribute {name}")
     
-    def add_render_plugin(self,instance):
-        self._renderer_list.append(instance)
+    def add_render_plugin(self,name,instance):
+        if name in self._renderer:
+            raise RendererAlreadyRegistredError(f"renderer with name {name} already registred")
+        print (self._renderer)
+        self._renderer[name]=instance
 
-    def render(self,*args,**kwargs):
-        results=[]
-        if not self._renderer_list:
-            log.error("Cannot render data as no renderer registred")
-        
-        for render_plugin in self._renderer_list:
-            results.append((render_plugin,render_plugin.render(self,*args,**kwargs)))
-        return results
+    def render(self,name,*args,**kwargs):
+        if name not in self._renderer:
+            log.error(f"cannot find renderer {name}, registred render plugins : {self._renderer}")
+        return self._renderer[name].render(self,*args,**kwargs)
     
+    def render_all(self,*args,**kwargs):
+        results=[]
+        for render_plugin_name,render_plugin in self._renderer.items():
+            results.append((render_plugin_name,render_plugin.render(self,*args,**kwargs)))
+        return results   
+
     def save(self,*args,**kwargs):
         self.render(*args,**kwargs)
 
@@ -133,6 +148,13 @@ class BaseFRUDict(UserDict):
 
     def append(self, obj):
         self.data[obj.name] = obj
+    
+    def remove(self, obj):
+        if isinstance(obj,str):
+
+            del self.data[obj]
+        else:
+            del self.data[obj.name]
 
     def __getitem__(self, key):
         if isinstance(key, int):

@@ -7,6 +7,7 @@ class BaseRenderer(object):
     def __init__(self,*args,**kwargs):
         self._obj=None
         self._file_suffix="json"
+        self.destination_path=kwargs.get("path")
     
     def render(self,obj,*args,**kwargs):
         self._obj=obj
