@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pytest -v
+#!/usr/bin/env -S pytest -v -rP
 
 import logging
 
@@ -12,11 +12,12 @@ from ndom.renderer.json import JSONRenderer
 
 
 switch = NetworkedInfrastructureDevice(name="test")
-switch.interfaces = InterfaceRange("ten1/1/1-48")
-
-
-
-
+switch.interfaces = InterfaceRange("ten1/1/1-3",speed=1000,status="down",admin_status="up")
+switch.interfaces.append(InterfaceRange("ten1/1/4-8",speed=25000,status="down",admin_status="up"))
+switch.interfaces+=InterfaceRange("ten1/1/9-10",speed=100000,status="down",admin_status="up")
+switch.interfaces.append("ten1/1/11",speed=25000,status="down",admin_status="up")
+switch.interfaces+=InterfaceRange("ten1/1/12",speed=25000,status="down",admin_status="up")
+switch.interfaces+=Interface(name="ten1/1/13",speed=25000,status="down",admin_status="up")
 
 
 def test_base():
@@ -25,19 +26,16 @@ def test_base():
     switch.render("print")
 
 def test_json(tmp_path):
-    d = tmp_path / "json"
-    d.mkdir()
-    p = d / "test.json"
-    print(p)
+    tmp_path.mkdir(exist_ok=True)
+    p = str(tmp_path / "test.yml")
     jsonwriter=JSONRenderer(path=str(p))
     switch.add_render_plugin("json",jsonwriter)
     switch.render("json")
 
 
 def test_yaml(tmp_path):
-    d = tmp_path / "yaml"
-    d.mkdir()
-    p = d / "test.yml"
+    tmp_path.mkdir(exist_ok=True)
+    p = str(tmp_path / "test.yml")
     yamlwriter=YAMLRenderer(path=str(p))
     switch.add_render_plugin("yaml",yamlwriter)
     switch.render("yaml")
