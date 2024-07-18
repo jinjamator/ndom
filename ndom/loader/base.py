@@ -1,9 +1,13 @@
+from ndom.dom.base.interface import *
+from ndom.dom.base.device import *
+from ndom.dom.base.psu import *
+
 class BaseLoader(object):
     def __init__(self,*args,**kwargs):
         self._obj=None
     
-    def load(self,*args,**kwargs):
-        return self.__load__(data,**kwargs)
+    def load(self,data,*args,**kwargs):
+        return self.__load__(*args,data=data,**kwargs)
 
     def __load__(self,*args,**kwargs):
         _attrs={}
@@ -12,11 +16,8 @@ class BaseLoader(object):
         obj_type=None
         if isinstance(data,dict):
             obj_type=kwargs.get("data",{}).get("__type__")
-            if obj_type=="InterfaceRange":
-                obj_type="InterfaceDict"
-            obj=globals()[obj_type]()
+            obj=globals()[obj_type](**data)
             for k,v in kwargs.get("data",{}).items():
-                # print(k,v)
                 if k == "__type__":
                     pass
                 elif isinstance(v,list):
