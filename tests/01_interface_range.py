@@ -4,7 +4,7 @@
 import logging
 log=logging.getLogger()
 from ndom.dom.base.device import NetworkedInfrastructureDevice
-from  ndom.dom.base.interface import Interface,InterfaceRange
+from  ndom.dom.base.interface import Interface,InterfaceRange,BreakoutInterface
 from ndom.dom.base.exceptions import MissingRequiredInstanceAttribute
 import pytest
 
@@ -28,7 +28,11 @@ def test_interface_range_remove():
     # 49 interfaces, 1 __type__ info
     switch.interfaces.remove("ten2/1")
     assert len(list(switch.interfaces.keys())) == 49
-    
+
+def test_add_breakout_interface():
+    breakout=BreakoutInterface(name="ten1/1/1/1",parent=switch.interfaces["ten1/1/1"])
+    switch.interfaces+=breakout
+    print(switch.interfaces)
 
 def test_interface_range_attribute_on_creation():
     # 49 interfaces, 1 __type__ info
@@ -45,4 +49,4 @@ def test_interface_range_attribute_on_creation():
     with pytest.raises(MissingRequiredInstanceAttribute):
         switch.interfaces.append(Interface("thisiswrong"))
 
-    
+

@@ -13,6 +13,21 @@ class AutoJsonEncoder(json.JSONEncoder):
             return obj.data
         if BaseFRU in obj.__class__.__bases__:
             return obj.data
+        if obj.__class__.__name__ == "BreakoutInterface":
+            _parent=obj.data["parent"]
+            
+            if _parent._parent.__class__.__name__ == "Interface":
+                return obj._parent._parent.name
+            
+            obj.data["parent"]=None
+            tmp=deepcopy(obj.data)
+            obj.data["parent"]=_parent
+
+            tmp["parent"]=obj.data["parent"].name
+            
+            
+                
+            return tmp
         return json.JSONEncoder.default(self, obj)
     
 
@@ -112,6 +127,9 @@ class BaseFRU(object):
 
     def save(self,*args,**kwargs):
         self.render(*args,**kwargs)
+    
+    def save_all(self,*args,**kwargs):
+        self.render(*args,**kwargs)
 
 
 class BaseFRUList(UserList):
@@ -147,6 +165,7 @@ class BaseFRUDict(UserDict):
         )
 
     def append(self, obj):
+        obj._parent=self
         self.data[obj.name] = obj
     
     def remove(self, obj):

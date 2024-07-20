@@ -3,7 +3,7 @@
 import logging
 log=logging.getLogger()
 from ndom.dom.base.device import NetworkedInfrastructureDevice
-from  ndom.dom.base.interface import Interface,InterfaceRange
+from  ndom.dom.base.interface import Interface,InterfaceRange,BreakoutInterface
 
 
 

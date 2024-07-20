@@ -1,12 +1,40 @@
 from . import BaseFRU,BaseFRUDict
+from . exceptions import AttributeExistsError
+
 class Interface(BaseFRU):
     def __init__(self, *args, **kwargs):
+        _attrs=kwargs.get("_attrs",["id", "name", "__type__", "speed", "status", "admin_status", ("capabilities", ())])
+        try:
+            del kwargs["_attrs"]
+        except:
+            pass
         super().__init__(
             *args,
-            _attrs=["id", "name", "__type__", "speed", "status", "admin_status", ("capabilities", ())],
+            _attrs=_attrs,
             **kwargs,
         )
 
+class BreakoutInterface(Interface):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            _attrs=["id", "parent" ,"name", "__type__", "speed", "status", "admin_status", ("capabilities", ())],
+            _required_attrs=["name", "parent"],
+            **kwargs,
+        )
+        if not isinstance(kwargs["parent"],Interface):
+            raise ValueError("parent must be an instance of Interface")
+        self._parent_interface=kwargs["parent"]
+        
+        try:
+            self._parent_interface.add_attr("breakout_interfaces",InterfaceRange())
+        except AttributeExistsError:
+            pass
+        self._parent_interface.breakout_interfaces.append(self)
+
+
+        
+        
 
 class InterfaceRange(BaseFRUDict):
     def __init__(self, interface_range=None, *args, **kwargs):
