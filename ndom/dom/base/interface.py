@@ -1,4 +1,4 @@
-from . import BaseFRU,BaseFRUDict
+from . import BaseFRU, BaseFRUDict
 from . exceptions import AttributeExistsError
 
 class Interface(BaseFRU):
