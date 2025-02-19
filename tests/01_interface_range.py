@@ -30,6 +30,8 @@ def test_interface_range_remove():
     assert len(list(switch.interfaces.keys())) == 49
 
 def test_add_breakout_interface():
+    switch = NetworkedInfrastructureDevice(name="test")
+    switch.interfaces = InterfaceRange("ten1/1/1-2")
     breakout=BreakoutInterface(name="ten1/1/1/1",parent=switch.interfaces["ten1/1/1"])
     switch.interfaces+=breakout
     print(switch.interfaces)
