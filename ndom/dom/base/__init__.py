@@ -15,7 +15,6 @@ class AutoJsonEncoder(json.JSONEncoder):
             return obj.data
         if obj.__class__.__name__ == "BreakoutInterface":
             _parent=obj.data["parent"]
-            
             if _parent._parent.__class__.__name__ == "Interface":
                 return obj._parent._parent.name
             
@@ -80,6 +79,8 @@ class BaseFRU(object):
         # we do not implicitly create attributes by access for now
         elif name in self.data:
             self.data[name] = value
+            if hasattr(self.data[name],"_parent"):
+                self.data[name]._parent=self
         else:
             super().__setattr__(name, value)
 
@@ -111,7 +112,6 @@ class BaseFRU(object):
     def add_render_plugin(self,name,instance):
         if name in self._renderer:
             raise RendererAlreadyRegistredError(f"renderer with name {name} already registred")
-        print (self._renderer)
         self._renderer[name]=instance
 
     def render(self,name,*args,**kwargs):
